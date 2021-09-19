@@ -21,4 +21,6 @@ depend() {
 
 start_pre() {
 	checkpath -d -m 0775 -o "$command_user" "$LOGPATH"
+
+	"${command}" ${command_args} -once || echo "Failed to do initial sync!"
 }
