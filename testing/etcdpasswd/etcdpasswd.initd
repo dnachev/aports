@@ -1,0 +1,24 @@
+#!/sbin/openrc-run
+# Copyright 2016 Alpine Linux
+# Distributed under the terms of the GNU General Public License v2
+# $Id$
+supervisor=supervise-daemon
+
+name="$RC_SVCNAME"
+description="Lightweight configuration management tool"
+
+command=/usr/bin/ep-agent
+command_args=""
+
+output_log="${LOGPATH}/ep-agent.out"
+error_log="${LOGPATH}/ep-agent.err"
+
+supervise_daemon_args=""
+
+depend() {
+	need net
+}
+
+start_pre() {
+	checkpath -d -m 0775 -o "$command_user" "$LOGPATH"
+}

@@ -1,0 +1,2 @@
+LOGPATH=/var/log/${RC_SVCNAME}
+USER=$RC_SVCNAME

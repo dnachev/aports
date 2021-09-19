@@ -1,0 +1,58 @@
+# Contributor: Dido Nachev <dnachev@dnachev.com>
+# Maintainer: Dido Nachev <dnachev@dnachev.com>
+pkgname=etcdpasswd
+pkgver=1.2.0
+pkgrel=1
+pkgdesc="etcdpasswd manages Linux users and groups with a central database on etcd"
+options="chmod-clean"
+url="https://github.com/cybozu-go/etcdpasswd"
+arch="x86_64"
+license="MIT"
+makedepends="go make"
+# Requires shadow package to be able to update the users and groups
+depends="shadow"
+subpackages="$pkgname-doc"
+source="$pkgname-$pkgver.tar.gz::https://github.com/cybozu-go/etcdpasswd/archive/v$pkgver.tar.gz
+
+  0010-Add-once-flag-to-be-used-during-initialization.patch
+ 
+	$pkgname.confd
+	$pkgname.initd
+	"
+
+export CGO_ENABLED=1
+
+prepare() {
+	default_prepare
+	export GOPATH="$(pwd)/_gopath"
+	_cybozu_go="$GOPATH/src/github.com/cybozu-go"
+	mkdir -vp $_cybozu_go
+	ln -vsf $srcdir/$pkgname-$pkgver $_cybozu_go/$pkgname
+}
+
+build() {
+	go install github.com/cybozu-go/etcdpasswd/...
+}
+
+package() {
+  echo "PWD: $(pwd)"
+	echo "GOPATH: $GOPATH"
+	mkdir -p "$pkgdir"/var/lib/$pkgname
+	install -Dm755 "$GOPATH/bin/ep-agent" "$pkgdir"/usr/bin/ep-agent
+	install -Dm755 "$GOPATH/bin/etcdpasswd" "$pkgdir"/usr/bin/etcdpasswd
+	install -Dm644 $srcdir/$pkgname.confd "$pkgdir"/etc/conf.d/$pkgname
+	install -Dm755 $srcdir/$pkgname.initd "$pkgdir"/etc/init.d/$pkgname
+	install -Dm644 LICENSE "$pkgdir"/usr/share/licenses/$pkgname/LICENSE
+}
+
+cleanup_srcdir() {
+	go clean -modcache
+	default_cleanup_srcdir
+}
+
+sha512sums="
+76c4b174533c32883335495448cce9f8dc84093a040c03482699578a73bc72b621b3462758e90396de5d6c96a5dc0f3ee406c903273a915aaa9b24686f659a2d  etcdpasswd-1.2.0.tar.gz
+57d5f7afdf51d1fcfa84f6808f31dbb75f0fda127903cdcd32de1258382e504a96ab0ff53a2e7616d1f62386316896d8bb9afdc325f78a88f733c072e4c7409d  0010-Add-once-flag-to-be-used-during-initialization.patch
+3ff6e796986d48347fd48ed2c35e2a4382b94946db7f33bb124a5c362b3549d22819d2d3504187795c41c1d332f41c48b384002b2348deb3d2158e32eff55b69  etcdpasswd.confd
+ba1901f08adeade715581bb6dae215f8f9ccc70d8fe44aba684ad68b5d4a772a54659046490c0aeee947b713e45c7ba28330805caa5e659cfb5254f4e0cdc5c4  etcdpasswd.initd
+"

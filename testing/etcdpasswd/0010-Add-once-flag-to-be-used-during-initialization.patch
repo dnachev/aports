@@ -1,0 +1,86 @@
+From 70509137a9dceb12fd740d57d74962b57735cb45 Mon Sep 17 00:00:00 2001
+From: Dido Nachev <dnachev@dido.dev>
+Date: Sat, 18 Sep 2021 21:09:01 -0700
+Subject: [PATCH 4/4] Add --once flag to be used during initialization
+
+If etcdpasswd is used on a system, which starts empty and it needs to
+populate its users, it is useful for ep-agent to be able to block until
+the initial sync has finished. After it has returned, the normal daemon
+mode can be started as usual.
+---
+ agent/agent.go       | 19 +++++++++++++++++++
+ pkg/ep-agent/main.go | 13 +++++++++++++
+ 2 files changed, 32 insertions(+)
+
+diff --git a/agent/agent.go b/agent/agent.go
+index 6586fd9..19f84b9 100644
+--- a/agent/agent.go
++++ b/agent/agent.go
+@@ -51,6 +51,24 @@ func (a *Agent) StartWatching(ctx context.Context, updateCh chan<- struct{}) err
+ 	return nil
+ }
+ 
++func (a *Agent) SynchronizeOnce(ctx context.Context) (int64, error) {
++		// obtain the current revision to avoid missing events
++	// it's OK that key "/" does not exists
++	resp, err := a.Get(ctx, "/")
++	if err != nil {
++		return -1, err
++	}
++
++	rev := resp.Header.Revision
++
++	db, err := etcdpasswd.GetDatabase(ctx, a.Client, rev)
++	if err != nil {
++		return -1, err
++	}
++
++	return rev, synchronize(ctx, db, a.Syncer)
++}
++
+ // StartUpdater is a goroutine to receive notification from watcher.
+ func (a *Agent) StartUpdater(ctx context.Context, updateCh <-chan struct{}) error {
+ 	for {
+@@ -73,6 +91,7 @@ func (a *Agent) StartUpdater(ctx context.Context, updateCh <-chan struct{}) erro
+ 			log.Info("finish sync", map[string]interface{}{
+ 				"rev": rev,
+ 			})
++			
+ 		case <-ctx.Done():
+ 			return nil
+ 		}
+diff --git a/pkg/ep-agent/main.go b/pkg/ep-agent/main.go
+index 940d007..2c1d2df 100644
+--- a/pkg/ep-agent/main.go
++++ b/pkg/ep-agent/main.go
+@@ -19,6 +19,7 @@ var (
+ 	flgConfigPath = flag.String("config", "/etc/etcdpasswd/config.yml", "configuration file path")
+ 	flgSyncer     = flag.String("syncer", "os", "user sync driver [os,dummy]")
+ 	flgVersion    = flag.Bool("version", false, "version")
++	flgOnce       = flag.Bool("once", false, "synchronize the users and exit")
+ )
+ 
+ func loadConfig(p string) (*etcdutil.Config, error) {
+@@ -69,7 +70,19 @@ func main() {
+ 
+ 	agent := agent.Agent{Client: etcd, Syncer: sc}
+ 
++	if *flgOnce {
++		rev, err := agent.SynchronizeOnce(context.Background())
++		if err != nil {
++			log.ErrorExit(err)
++			os.Exit(1)
++		} else {
++			fmt.Fprintf(os.Stderr, "Synchronized user database for rev %\n", rev);
++			os.Exit(0)
++		}
++	}
++
+ 	updateCh := make(chan struct{}, 1)
++
+ 	well.Go(func(ctx context.Context) error {
+ 		return agent.StartWatching(ctx, updateCh)
+ 	})
+-- 
+2.25.1
+
